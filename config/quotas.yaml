@@ -1,0 +1,12 @@
+genre:
+  hommes: 8
+  femmes: 7
+
+age:
+  jeunes: 12
+  moyen: 2
+  senior: 1
+
+niveau:
+  inferieur: 12
+  superieur: 3

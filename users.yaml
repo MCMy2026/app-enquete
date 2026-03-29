@@ -1,0 +1,14 @@
+credentials:
+  usernames:
+    '1':
+      name: ESTELLE
+      password: $2b$12$8tuZYZ2wYJFfoQ6zoePZFufXbyutil5nAp/hiJpXYVDjTeSmjoA52
+      role: user
+    admin:
+      name: ADMIN
+      password: $2b$12$evMeLNfSVckWwWOcxuEGQ.IvrMI4uY3FD.VAaMGQTQ7ZTEXWyT9eG
+      role: admin
+    edi:
+      name: MME EDI
+      password: $2b$12$hFQN3qym9UgkYhITx1t8H.4D244uaGPyU/HhVsz/jI8O3PAEVnqLC
+      role: user
