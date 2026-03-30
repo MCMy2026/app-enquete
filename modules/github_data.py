@@ -1,15 +1,12 @@
 import requests
 import base64
 import pandas as pd
-import streamlit as st
 from io import StringIO
+import streamlit as st
 import time
 
-# 🔐 Secrets Streamlit
 TOKEN = st.secrets["GITHUB_TOKEN"]
 REPO = st.secrets["GITHUB_REPO"]
-
-# 📁 Chemin du CSV dans ton dépôt
 FILE_PATH = "data/appels_saisis.csv"
 
 HEADERS = {
@@ -17,67 +14,57 @@ HEADERS = {
     "Accept": "application/vnd.github.v3+json"
 }
 
-# ✅ LECTURE DU CSV DE GITHUB
+# ✅ Lecture toujours à jour
 def read_data():
     url = f"https://api.github.com/repos/{REPO}/contents/{FILE_PATH}"
     r = requests.get(url, headers=HEADERS)
-
     if r.status_code != 200:
-        st.error(f"❌ GitHub read error {r.status_code}")
-        st.write(r.json())
-        st.stop()
-
+        st.error(f"Erreur lecture GitHub {r.status_code}")
+        return pd.DataFrame(), None
     data = r.json()
     content = base64.b64decode(data["content"]).decode("utf-8")
+    return pd.read_csv(StringIO(content)), data["sha"]
 
-    df = pd.read_csv(StringIO(content))
-    return df, data["sha"]
+# ✅ Sauvegarde robuste avec mise à jour SHA
+def save_data(df):
+    max_attempts = 5
 
+    for attempt in range(max_attempts):
+        # Lire dernière version + SHA
+        current_df, sha = read_data()
+        if sha is None:
+            time.sleep(1)
+            continue
 
-# ✅ SAUVEGARDE AVEC GESTION SHA & RETRY
-def save_data(df, sha, max_retries=3):
-    url = f"https://api.github.com/repos/{REPO}/contents/{FILE_PATH}"
-
-    for _ in range(max_retries):
-        content = df.to_csv(index=False)
-        content_encoded = base64.b64encode(content.encode()).decode()
+        # Fusionner l'ancien avec le nouveau
+        merged = pd.concat([current_df, df], ignore_index=True)
 
         payload = {
             "message": "Update appels_saisis.csv",
-            "content": content_encoded,
-            "sha": sha
+            "content": base64.b64encode(merged.to_csv(index=False).encode()).decode(),
+            "sha": sha,
         }
 
+        url = f"https://api.github.com/repos/{REPO}/contents/{FILE_PATH}"
         r = requests.put(url, json=payload, headers=HEADERS)
 
-        # ✅ Sauvegarde OK
-        if r.status_code in [200, 201]:
+        # ✅ Succès
+        if r.status_code in (200, 201):
             return True
 
-        # 🔁 SHA mismatch → récupérer la nouvelle version et recommencer
-        elif r.status_code == 409:
+        # ⚠️ Conflit SHA → attendre et réessayer
+        if r.status_code == 409:
             time.sleep(1)
-            df, sha = read_data()
+            continue
 
-        else:
-            st.error(f"❌ GitHub save error {r.status_code}")
-            st.write(r.json())
-            return False
+        st.error(f"GitHub ERROR {r.status_code}: {r.json()}")
+        return False
 
     return False
 
-
-# ✅ AJOUT LIGNE AVEC VRAIES COLONNES
+# ✅ Ajout ligne qui ne peut PAS échouer (rejoue automatiquement)
 def add_row_safe(row):
-    df, sha = read_data()
-
-    # ✅ Colonnes dans le bon ordre !
-    required_cols = [
-        "Date", "Enqueteur", "Telephone", "Commune",
-        "Status", "Sexe", "Age_group", "Niveau_cat"
-    ]
-
-    new_row = pd.DataFrame([{
+    df = pd.DataFrame([{
         "Date": row[0],
         "Enqueteur": row[1],
         "Telephone": row[2],
@@ -88,7 +75,4 @@ def add_row_safe(row):
         "Niveau_cat": row[7]
     }])
 
-    # ✅ Concat propre
-    df = pd.concat([df, new_row], ignore_index=True)
-
-    return save_data(df, sha)
+    return save_data(df)
