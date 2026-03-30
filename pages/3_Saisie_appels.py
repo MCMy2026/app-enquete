@@ -7,14 +7,14 @@ from modules.recommendation import build_recommendation_message, recommend_panel
 from modules.quotas import get_quotas
 from modules.mission import compute_daily_mission
 
-# 🔐 Auth
+# ✅ AUTHENTIFICATION
 if "authentication_status" not in st.session_state or not st.session_state["authentication_status"]:
     st.warning("🔒 Veuillez vous connecter")
     st.stop()
 
-st.title("📞 Saisie intelligente")
+st.title("📞 Saisie intelligente (GitHub API)")
 
-# SESSION
+# ✅ SESSION STATE
 if "telephone" not in st.session_state:
     st.session_state.telephone = ""
 
@@ -25,45 +25,44 @@ if st.session_state.reset:
     st.session_state.telephone = ""
     st.session_state.reset = False
 
-# UTIL
+# ✅ NETTOYAGE TEL
 def clean_phone(phone):
     return str(phone).replace(" ", "").replace("-", "").strip()
 
-# DATA
+# ✅ CHARGEMENT DES DONNÉES (via GitHub API)
 df, _ = read_data()
 
 if df.empty:
     df = pd.DataFrame(columns=[
-        "Date","Enqueteur","Telephone","Commune","Status",
-        "Sexe","Age_group","Niveau_cat"
+        "Date","Enqueteur","Telephone","Commune",
+        "Status","Sexe","Age_group","Niveau_cat"
     ])
 
 df["Telephone"] = df["Telephone"].astype(str).apply(clean_phone)
 df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
 
-# KPI
+# ✅ KPI & QUOTAS
 quotas = get_quotas()
 kpis = compute_quota_kpis(df, quotas)
 
 st.subheader("🤖 Recommandation")
 st.info(build_recommendation_message(kpis))
 
-# BASE PANEL
+# ✅ BASE PANEL
 df_pool = pd.read_excel("data/base_appels.xlsx")
 df_pool["Telephone"] = df_pool["Telephone"].astype(str).apply(clean_phone)
 
 communes = sorted(df_pool["Commune"].dropna().unique())
 
-# INPUT
+# ✅ INPUT TELEPHONE
 telephone = st.text_input("Téléphone", key="telephone")
 telephone_clean = clean_phone(telephone)
-
 paneliste = None
 
-# AUTO REMPLISSAGE
+# ✅ AUTO‑REMPLISSAGE PANELISTE
 if telephone_clean:
     match = df_pool[df_pool["Telephone"] == telephone_clean]
-
+    
     if not match.empty:
         paneliste = match.iloc[0]
         st.success("✅ Paneliste reconnu")
@@ -76,17 +75,17 @@ if telephone_clean:
     else:
         st.warning("⚠️ Numéro inconnu")
 
-# COMMUNE
+# ✅ CHOIX COMMUNE
 if paneliste is not None and paneliste["Commune"] in communes:
     commune = st.selectbox("Commune", communes, index=communes.index(paneliste["Commune"]))
 else:
     commune = st.selectbox("Commune", communes)
 
-# DATE
+# ✅ DATE
 date = st.date_input("Date")
 current_date = pd.to_datetime(date)
 
-# REGLE 2 APPELS
+# ✅ RÈGLE : MAX 2 APPELS/SEMAINE
 df["Year"] = df["Date"].dt.isocalendar().year
 df["Week"] = df["Date"].dt.isocalendar().week
 
@@ -101,7 +100,7 @@ calls_week = df[
 
 st.info(f"📊 Appels cette semaine : {calls_week}/2")
 
-# MISSION
+# ✅ MISSION DU JOUR
 df_today = df[
     (df["Commune"] == commune) &
     (df["Date"] == current_date)
@@ -111,19 +110,19 @@ st.subheader("🎯 Mission du jour")
 mission = compute_daily_mission(df_today, quotas)
 st.dataframe(mission)
 
-# SUGGESTIONS
+# ✅ SUGGESTIONS
 df_pool_filtered = df_pool[df_pool["Commune"] == commune]
 suggestions = recommend_panelists(df_pool_filtered, df, kpis)
 
 st.subheader("📞 Suggestions")
 st.dataframe(suggestions.head())
 
-# FORM
+# ✅ FORMULAIRE
 sexe = st.selectbox("Sexe", ["Homme","Femme"])
 age = st.selectbox("Age", ["18-39","40-54","55+"])
 niveau = st.selectbox("Niveau", ["inferieur","superieur"])
-
 enq = st.session_state["name"]
+
 st.info(f"👤 Connecté : {enq}")
 
 status = st.selectbox("Statut", ["Répondu","Occupé","Absent"])
@@ -133,7 +132,7 @@ disable_button = calls_week >= 2
 if disable_button:
     st.error("🚨 Limite atteinte : 2 appels/semaine")
 
-# SAVE
+# ✅ ENREGISTREMENT — GitHub API ✅
 if st.button("Enregistrer", disabled=disable_button):
 
     if not telephone_clean:
@@ -152,13 +151,13 @@ if st.button("Enregistrer", disabled=disable_button):
     ])
 
     if success:
-        st.success("✅ Appel enregistré (sécurisé)")
+        st.success("✅ Appel enregistré dans GitHub")
         st.session_state.reset = True
         st.rerun()
     else:
-        st.error("❌ Erreur lors de l'enregistrement")
+        st.error("❌ Erreur lors de l'enregistrement (GitHub API)")
 
-# RESET
+# ✅ RESET
 if st.button("🧹 Vider les champs"):
     st.session_state.reset = True
     st.rerun()
