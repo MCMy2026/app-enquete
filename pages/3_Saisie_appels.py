@@ -34,8 +34,8 @@ df, _ = read_data()
 
 if df.empty:
     df = pd.DataFrame(columns=[
-        "Date","Enqueteur","Telephone","Commune","Status",
-        "Sexe","Age_group","Niveau_cat"
+        "Date","Enqueteur","Telephone","Commune",
+        "Status","Sexe","Age_group","Niveau_cat"
     ])
 
 df["Telephone"] = df["Telephone"].astype(str).apply(clean_phone)
@@ -55,7 +55,7 @@ df_pool["Telephone"] = df_pool["Telephone"].astype(str).apply(clean_phone)
 communes = sorted(df_pool["Commune"].dropna().unique())
 
 # INPUT
-telephone = st.text_input("Téléphone", key="telephone")
+telephone = st.text_input("📞 Téléphone", key="telephone")
 telephone_clean = clean_phone(telephone)
 
 paneliste = None
@@ -83,7 +83,7 @@ else:
     commune = st.selectbox("Commune", communes)
 
 # DATE
-date = st.date_input("Date")
+date = st.date_input("📅 Date")
 current_date = pd.to_datetime(date)
 
 # REGLE 2 APPELS
@@ -111,13 +111,6 @@ st.subheader("🎯 Mission du jour")
 mission = compute_daily_mission(df_today, quotas)
 st.dataframe(mission)
 
-# SUGGESTIONS
-df_pool_filtered = df_pool[df_pool["Commune"] == commune]
-suggestions = recommend_panelists(df_pool_filtered, df, kpis)
-
-st.subheader("📞 Suggestions")
-st.dataframe(suggestions.head())
-
 # FORM
 sexe = st.selectbox("Sexe", ["Homme","Femme"])
 age = st.selectbox("Age", ["18-39","40-54","55+"])
@@ -133,26 +126,28 @@ disable_button = calls_week >= 2
 if disable_button:
     st.error("🚨 Limite atteinte : 2 appels/semaine")
 
-# SAVE
-if st.button("Enregistrer", disabled=disable_button):
+# 💾 ENREGISTREMENT (CORRIGÉ)
+if st.button("💾 Enregistrer", disabled=disable_button):
 
     if not telephone_clean:
         st.error("Numéro obligatoire")
         st.stop()
 
-    success = add_row_safe([
-        str(current_date),
-        enq,
-        telephone_clean,
-        commune,
-        status,
-        sexe,
-        age,
-        niveau
-    ])
+    row = {
+        "Date": str(current_date),
+        "Enqueteur": enq,
+        "Telephone": telephone_clean,
+        "Commune": commune,
+        "Status": status,
+        "Sexe": sexe,
+        "Age_group": age,
+        "Niveau_cat": niveau
+    }
+
+    success = add_row_safe(row)
 
     if success:
-        st.success("✅ Appel enregistré (sécurisé)")
+        st.success("✅ Appel enregistré avec succès")
         st.session_state.reset = True
         st.rerun()
     else:
