@@ -9,9 +9,19 @@ COLUMNS = [
 FILE_PATH = "data/appels_saisis.csv"
 
 # =========================
-# READ
+# 🔥 NORMALIZE PHONE (GLOBAL)
+# =========================
+def normalize_phone(x):
+    try:
+        return str(int(float(x)))
+    except:
+        return str(x).replace(" ", "").replace("-", "").replace(".0", "").strip()
+
+# =========================
+# 📥 READ
 # =========================
 def read_data():
+
     if not os.path.exists(FILE_PATH):
         return pd.DataFrame(columns=COLUMNS), None
 
@@ -24,14 +34,14 @@ def read_data():
 
     df = df[COLUMNS]
 
-    # nettoyage
-    df["Telephone"] = df["Telephone"].astype(str).str.strip()
+    # nettoyage critique
+    df["Telephone"] = df["Telephone"].apply(normalize_phone)
     df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
 
     return df, None
 
 # =========================
-# SAVE
+# 💾 SAVE
 # =========================
 def save_data(df):
 
@@ -47,26 +57,23 @@ def save_data(df):
     return True
 
 # =========================
-# ADD ROW SAFE
+# ➕ ADD ROW SAFE
 # =========================
 def add_row_safe(row):
 
     df, _ = read_data()
 
-    # convertir dict → DataFrame
     new_row = pd.DataFrame([row])
 
-    # sécuriser colonnes
     for col in COLUMNS:
         if col not in new_row.columns:
             new_row[col] = ""
 
     new_row = new_row[COLUMNS]
 
-    # nettoyage téléphone
-    new_row["Telephone"] = new_row["Telephone"].astype(str).str.strip()
+    # 💥 NORMALISATION ICI
+    new_row["Telephone"] = new_row["Telephone"].apply(normalize_phone)
 
-    # concat
     df = pd.concat([df, new_row], ignore_index=True)
 
     return save_data(df)
