@@ -33,7 +33,7 @@ def read_data():
         except:
             df = pd.DataFrame()
 
-        return df, data["sha"]
+        return df, data.get("sha")
 
     if r.status_code == 404:
         return pd.DataFrame(), None
@@ -59,7 +59,7 @@ def save_data(df):
         if current_df.empty:
             current_df = pd.DataFrame(columns=required_cols)
 
-        # 🔧 Harmonisation colonnes
+        # 🔧 Harmonisation
         for col in required_cols:
             if col not in current_df.columns:
                 current_df[col] = ""
@@ -98,28 +98,39 @@ def save_data(df):
 
 
 # =========================
-# ➕ AJOUT SÉCURISÉ (RÈGLES)
+# ➕ AJOUT ULTRA SÉCURISÉ
 # =========================
 def add_row_safe(row):
 
     # =========================
-    # 🔒 VALIDATION INPUT
+    # 🔒 PROTECTION MAX
     # =========================
-    if not isinstance(row, dict):
-        st.error("❌ Format invalide")
+    if row is None:
+        st.error("❌ row = None")
         return False
 
-    if "Date" not in row or "Telephone" not in row:
-        st.error("❌ Données incomplètes")
+    if not isinstance(row, dict):
+        st.error(f"❌ Mauvais format: {type(row)}")
         return False
+
+    required_fields = ["Date", "Telephone"]
+
+    for f in required_fields:
+        if f not in row or row[f] in [None, ""]:
+            st.error(f"❌ Champ invalide : {f}")
+            return False
 
     # =========================
     # 🔧 NORMALISATION
     # =========================
-    tel = str(row["Telephone"]).strip()
-    date = pd.to_datetime(row["Date"], errors="coerce")
+    try:
+        tel = str(row["Telephone"]).strip()
+        date = pd.to_datetime(row["Date"], errors="coerce")
+    except Exception as e:
+        st.error(f"❌ Erreur conversion: {e}")
+        return False
 
-    if not tel or pd.isna(date):
+    if tel == "" or pd.isna(date):
         st.error("❌ Données invalides")
         return False
 
@@ -139,7 +150,7 @@ def add_row_safe(row):
     current_df["Date"] = pd.to_datetime(current_df["Date"], errors="coerce")
 
     # =========================
-    # 🔒 RÈGLE 1 : 1 FOIS / JOUR
+    # 🔒 RÈGLE 1 : 1 / JOUR
     # =========================
     same_day = current_df[
         (current_df["Telephone"] == tel) &
@@ -151,7 +162,7 @@ def add_row_safe(row):
         return False
 
     # =========================
-    # 🔒 RÈGLE 2 : MAX 2 / SEMAINE
+    # 🔒 RÈGLE 2 : 2 / SEMAINE
     # =========================
     current_df["Year"] = current_df["Date"].dt.isocalendar().year
     current_df["Week"] = current_df["Date"].dt.isocalendar().week
