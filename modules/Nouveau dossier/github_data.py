@@ -18,7 +18,7 @@ HEADERS = {
 }
 
 # =========================
-# 📥 LECTURE CSV
+# 📥 LECTURE CSV GITHUB
 # =========================
 def read_data():
     url = f"https://api.github.com/repos/{REPO}/contents/{FILE_PATH}"
@@ -30,15 +30,16 @@ def read_data():
 
         try:
             df = pd.read_csv(StringIO(content))
-        except:
+        except Exception:
             df = pd.DataFrame()
 
         return df, data["sha"]
 
+    # fichier inexistant
     if r.status_code == 404:
         return pd.DataFrame(), None
 
-    st.error(f"❌ Erreur lecture GitHub ({r.status_code})")
+    st.error(f"❌ Lecture GitHub impossible ({r.status_code})")
     return pd.DataFrame(), None
 
 
@@ -47,30 +48,57 @@ def read_data():
 # =========================
 def save_data(df):
 
+    max_attempts = 5
+
     required_cols = [
-        "Date","Enqueteur","Telephone","Commune",
-        "Status","Sexe","Age_group","Niveau_cat"
+        "Date",
+        "Enqueteur",
+        "Telephone",
+        "Commune",
+        "Status",
+        "Sexe",
+        "Age_group",
+        "Niveau_cat"
     ]
 
-    for _ in range(5):
+    for attempt in range(max_attempts):
 
         current_df, sha = read_data()
 
+        # =========================
+        # 🆕 INIT SI FICHIER ABSENT
+        # =========================
+        if sha is None:
+            current_df = pd.DataFrame(columns=required_cols)
+            sha = None
+
+        # =========================
+        # 🔧 NORMALISATION COLONNES
+        # =========================
         if current_df.empty:
             current_df = pd.DataFrame(columns=required_cols)
 
-        # 🔧 Harmonisation colonnes
+        # Ajouter colonnes manquantes
         for col in required_cols:
             if col not in current_df.columns:
                 current_df[col] = ""
+
+        for col in required_cols:
             if col not in df.columns:
                 df[col] = ""
 
+        # Forcer ordre
         current_df = current_df[required_cols]
         df = df[required_cols]
 
+        # =========================
+        # 📦 MERGE
+        # =========================
         merged = pd.concat([current_df, df], ignore_index=True)
 
+        # =========================
+        # 🚀 PUSH GITHUB
+        # =========================
         payload = {
             "message": "Update appels_saisis.csv",
             "content": base64.b64encode(
@@ -78,6 +106,7 @@ def save_data(df):
             ).decode()
         }
 
+        # ⚠️ sha seulement si fichier existe
         if sha:
             payload["sha"] = sha
 
@@ -87,18 +116,19 @@ def save_data(df):
         if r.status_code in (200, 201):
             return True
 
+        # conflit → retry
         if r.status_code == 409:
             time.sleep(1)
             continue
 
-        st.error(f"❌ GitHub ERROR {r.status_code}")
+        st.error(f"❌ GitHub ERROR {r.status_code}: {r.text}")
         return False
 
     return False
 
 
 # =========================
-# ➕ AJOUT SÉCURISÉ (RÈGLES)
+# ➕ AJOUT LIGNE SÉCURISÉ
 # =========================
 def add_row_safe(row):
 
@@ -106,70 +136,52 @@ def add_row_safe(row):
     # 🔒 VALIDATION INPUT
     # =========================
     if not isinstance(row, dict):
-        st.error("❌ Format invalide")
+        st.error("❌ Format de données invalide")
         return False
 
-    if "Date" not in row or "Telephone" not in row:
-        st.error("❌ Données incomplètes")
+    today = str(row.get("Date", "")).strip()
+    tel = str(row.get("Telephone", "")).strip()
+
+    if not today or not tel:
+        st.error("❌ Date ou téléphone manquant")
         return False
 
-    # =========================
-    # 🔧 NORMALISATION
-    # =========================
-    tel = str(row["Telephone"]).strip()
-    date = pd.to_datetime(row["Date"], errors="coerce")
+    df_new = pd.DataFrame([row])
 
-    if not tel or pd.isna(date):
-        st.error("❌ Données invalides")
-        return False
-
-    row["Telephone"] = tel
-    row["Date"] = date.strftime("%Y-%m-%d")
-
-    # =========================
-    # 📥 DATA EXISTANTE
-    # =========================
     current_df, _ = read_data()
 
-    if current_df.empty:
-        return save_data(pd.DataFrame([row]))
+    if not current_df.empty:
 
-    # nettoyage
-    current_df["Telephone"] = current_df["Telephone"].astype(str).str.strip()
-    current_df["Date"] = pd.to_datetime(current_df["Date"], errors="coerce")
+        # sécuriser colonnes
+        if "Date" not in current_df.columns:
+            current_df["Date"] = ""
+        if "Telephone" not in current_df.columns:
+            current_df["Telephone"] = ""
 
-    # =========================
-    # 🔒 RÈGLE 1 : 1 FOIS / JOUR
-    # =========================
-    same_day = current_df[
-        (current_df["Telephone"] == tel) &
-        (current_df["Date"].dt.date == date.date())
-    ]
+        # =========================
+        # 🔒 RÈGLE 1 : DOUBLON JOUR
+        # =========================
+        doublon = current_df[
+            (current_df["Date"] == today) &
+            (current_df["Telephone"] == tel)
+        ]
 
-    if not same_day.empty:
-        st.warning("⚠️ Déjà appelé aujourd’hui")
-        return False
+        if not doublon.empty:
+            st.warning("⚠️ Numéro déjà appelé aujourd'hui")
+            return False
 
-    # =========================
-    # 🔒 RÈGLE 2 : MAX 2 / SEMAINE
-    # =========================
-    current_df["Year"] = current_df["Date"].dt.isocalendar().year
-    current_df["Week"] = current_df["Date"].dt.isocalendar().week
+        # =========================
+        # 🔒 RÈGLE 2 : MAX 2 FOIS
+        # =========================
+        nb = current_df[
+            current_df["Telephone"] == tel
+        ].shape[0]
 
-    y = date.isocalendar().year
-    w = date.isocalendar().week
-
-    week_calls = current_df[
-        (current_df["Telephone"] == tel) &
-        (current_df["Year"] == y) &
-        (current_df["Week"] == w)
-    ]
-
-    if len(week_calls) >= 2:
-        st.warning("⚠️ Limite 2 appels / semaine atteinte")
-        return False
+        if nb >= 2:
+            st.warning("⚠️ Numéro déjà appelé 2 fois")
+            return False
 
     # =========================
-    # 💾 SAVE
+    # 💾 SAUVEGARDE
     # =========================
-    return save_data(pd.DataFrame([row]))
+    return save_data(df_new)
