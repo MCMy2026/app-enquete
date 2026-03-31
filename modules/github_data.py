@@ -37,7 +37,9 @@ def save_data(df):
             continue
 
         # Fusionner l'ancien avec le nouveau
+        df = df[current_df.columns]
         merged = pd.concat([current_df, df], ignore_index=True)
+        
 
         payload = {
             "message": "Update appels_saisis.csv",

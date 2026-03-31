@@ -7,29 +7,24 @@ from modules.recommendation import build_recommendation_message, recommend_panel
 from modules.quotas import get_quotas
 from modules.mission import compute_daily_mission
 
-# ✅ AUTHENTIFICATION
+# =========================
+# 🔐 AUTH
+# =========================
 if "authentication_status" not in st.session_state or not st.session_state["authentication_status"]:
     st.warning("🔒 Veuillez vous connecter")
     st.stop()
 
-st.title("📞 Saisie intelligente (GitHub API)")
+st.title("📞 Saisie intelligente (PRO)")
 
-# ✅ SESSION STATE
-if "telephone" not in st.session_state:
-    st.session_state.telephone = ""
-
-if "reset" not in st.session_state:
-    st.session_state.reset = False
-
-if st.session_state.reset:
-    st.session_state.telephone = ""
-    st.session_state.reset = False
-
-# ✅ NETTOYAGE TEL
+# =========================
+# 🧠 UTILS
+# =========================
 def clean_phone(phone):
     return str(phone).replace(" ", "").replace("-", "").strip()
 
-# ✅ CHARGEMENT DES DONNÉES (via GitHub API)
+# =========================
+# 📥 DATA
+# =========================
 df, _ = read_data()
 
 if df.empty:
@@ -41,28 +36,33 @@ if df.empty:
 df["Telephone"] = df["Telephone"].astype(str).apply(clean_phone)
 df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
 
-# ✅ KPI & QUOTAS
+# =========================
+# 📊 KPI
+# =========================
 quotas = get_quotas()
 kpis = compute_quota_kpis(df, quotas)
 
 st.subheader("🤖 Recommandation")
 st.info(build_recommendation_message(kpis))
 
-# ✅ BASE PANEL
+# =========================
+# 📂 BASE PANEL
+# =========================
 df_pool = pd.read_excel("data/base_appels.xlsx")
 df_pool["Telephone"] = df_pool["Telephone"].astype(str).apply(clean_phone)
 
 communes = sorted(df_pool["Commune"].dropna().unique())
 
-# ✅ INPUT TELEPHONE
-telephone = st.text_input("Téléphone", key="telephone")
+# =========================
+# 📞 INPUT TEL
+# =========================
+telephone = st.text_input("Téléphone")
 telephone_clean = clean_phone(telephone)
 paneliste = None
 
-# ✅ AUTO‑REMPLISSAGE PANELISTE
 if telephone_clean:
     match = df_pool[df_pool["Telephone"] == telephone_clean]
-    
+
     if not match.empty:
         paneliste = match.iloc[0]
         st.success("✅ Paneliste reconnu")
@@ -75,89 +75,132 @@ if telephone_clean:
     else:
         st.warning("⚠️ Numéro inconnu")
 
-# ✅ CHOIX COMMUNE
+# =========================
+# 📍 COMMUNE
+# =========================
 if paneliste is not None and paneliste["Commune"] in communes:
     commune = st.selectbox("Commune", communes, index=communes.index(paneliste["Commune"]))
 else:
     commune = st.selectbox("Commune", communes)
 
-# ✅ DATE
+# =========================
+# 📅 DATE
+# =========================
 date = st.date_input("Date")
 current_date = pd.to_datetime(date)
 
-# ✅ RÈGLE : MAX 2 APPELS/SEMAINE
+# =========================
+# 📊 RÈGLE SEMAINE
+# =========================
 df["Year"] = df["Date"].dt.isocalendar().year
 df["Week"] = df["Date"].dt.isocalendar().week
 
-current_year = current_date.isocalendar().year
-current_week = current_date.isocalendar().week
-
 calls_week = df[
     (df["Telephone"] == telephone_clean) &
-    (df["Year"] == current_year) &
-    (df["Week"] == current_week)
+    (df["Year"] == current_date.isocalendar().year) &
+    (df["Week"] == current_date.isocalendar().week)
 ].shape[0]
 
-st.info(f"📊 Appels cette semaine : {calls_week}/2")
+st.info(f"📊 Appels semaine : {calls_week}/2")
 
-# ✅ MISSION DU JOUR
+# =========================
+# 🎯 MISSION
+# =========================
 df_today = df[
     (df["Commune"] == commune) &
-    (df["Date"] == current_date)
+    (df["Date"].dt.date == current_date.date())
 ]
 
 st.subheader("🎯 Mission du jour")
-mission = compute_daily_mission(df_today, quotas)
-st.dataframe(mission)
+st.dataframe(compute_daily_mission(df_today, quotas))
 
-# ✅ SUGGESTIONS
-df_pool_filtered = df_pool[df_pool["Commune"] == commune]
-suggestions = recommend_panelists(df_pool_filtered, df, kpis)
+# =========================
+# 🤖 SUGGESTIONS
+# =========================
+suggestions = recommend_panelists(
+    df_pool[df_pool["Commune"] == commune],
+    df,
+    kpis
+)
 
 st.subheader("📞 Suggestions")
-st.dataframe(suggestions.head())
+st.dataframe(suggestions)
 
-# ✅ FORMULAIRE
+# =========================
+# 🧾 FORM
+# =========================
 sexe = st.selectbox("Sexe", ["Homme","Femme"])
 age = st.selectbox("Age", ["18-39","40-54","55+"])
 niveau = st.selectbox("Niveau", ["inferieur","superieur"])
-enq = st.session_state["name"]
-
-st.info(f"👤 Connecté : {enq}")
-
 status = st.selectbox("Statut", ["Répondu","Occupé","Absent"])
 
-disable_button = calls_week >= 2
+enq = st.session_state["name"]
 
-if disable_button:
-    st.error("🚨 Limite atteinte : 2 appels/semaine")
+# =========================
+# 🧠 SCORE
+# =========================
+score = 100
 
-# ✅ ENREGISTREMENT — GitHub API ✅
+already_today = df[
+    (df["Telephone"] == telephone_clean) &
+    (df["Date"].dt.date == current_date.date())
+].shape[0]
+
+if already_today > 0:
+    score -= 80
+
+if calls_week >= 2:
+    score -= 50
+
+st.subheader("🧠 Score appel")
+
+if score >= 70:
+    st.success(f"Score {score} → recommandé")
+elif score >= 40:
+    st.warning(f"Score {score} → moyen")
+else:
+    st.error(f"Score {score} → déconseillé")
+
+# =========================
+# 🚫 VALIDATIONS
+# =========================
+errors = []
+
+if telephone_clean == "":
+    errors.append("Numéro obligatoire")
+
+if paneliste is None:
+    errors.append("Numéro non reconnu")
+
+if calls_week >= 2:
+    errors.append("Limite semaine atteinte")
+
+if already_today > 0:
+    errors.append("Déjà appelé aujourd’hui")
+
+for e in errors:
+    st.error(e)
+
+# =========================
+# 💾 SAVE
+# =========================
+disable_button = len(errors) > 0 or score < 40
+
 if st.button("Enregistrer", disabled=disable_button):
 
-    if not telephone_clean:
-        st.error("Numéro obligatoire")
-        st.stop()
-
-    success = add_row_safe([
-        str(current_date),
-        enq,
+    row = [
+        current_date.strftime("%Y-%m-%d"),
+        str(enq),
         telephone_clean,
         commune,
         status,
         sexe,
         age,
         niveau
-    ])
+    ]
 
-    if success:
-        st.success("✅ Appel enregistré dans GitHub")
-        st.session_state.reset = True
+    if add_row_safe(row):
+        st.success("✅ Enregistré")
         st.rerun()
     else:
-        st.error("❌ Erreur lors de l'enregistrement (GitHub API)")
-
-# ✅ RESET
-if st.button("🧹 Vider les champs"):
-    st.session_state.reset = True
-    st.rerun()
+        st.error("❌ Erreur GitHub")
