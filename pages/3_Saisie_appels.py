@@ -2,14 +2,19 @@ import streamlit as st
 import pandas as pd
 import os
 
-from modules.github_data import read_data, add_row_safe, normalize_phone
+from modules.db import init_db, read_data, add_row, normalize_phone
 
-st.title("📞 Saisie appels (FIX FINAL)")
+st.title("📞 Saisie appels (SQLite PRO)")
+
+# =========================
+# 🗄️ INIT DB
+# =========================
+init_db()
 
 # =========================
 # 📥 DATA
 # =========================
-df, _ = read_data()
+df = read_data()
 
 # =========================
 # 📂 BASE PANEL
@@ -28,10 +33,8 @@ df_pool["Telephone"] = df_pool["Telephone"].apply(normalize_phone)
 telephone = st.text_input("📞 Téléphone")
 telephone_clean = normalize_phone(telephone)
 
-st.write("📞 Téléphone normalisé :", telephone_clean)
-
 # =========================
-# 🔍 MATCH PANEL
+# 🔍 MATCH
 # =========================
 paneliste = None
 
@@ -42,10 +45,10 @@ if telephone_clean != "":
         paneliste = match.iloc[0]
         st.success("✅ Paneliste reconnu")
     else:
-        st.error("❌ Numéro non trouvé dans la base")
+        st.error("❌ Numéro inconnu")
 
 # =========================
-# 📍 COMMUNE
+# 📍 COMMUNE AUTO
 # =========================
 if paneliste is not None:
     commune = paneliste["Commune"]
@@ -74,9 +77,6 @@ else:
 # =========================
 date = st.date_input("Date")
 current_date = pd.to_datetime(date)
-
-df["Telephone"] = df["Telephone"].apply(normalize_phone)
-df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
 
 df["Year"] = df["Date"].dt.isocalendar().year
 df["Week"] = df["Date"].dt.isocalendar().week
@@ -109,17 +109,16 @@ if already_today > 0:
 if calls_week >= 2:
     errors.append("Limite hebdomadaire atteinte")
 
-# afficher erreurs
 for e in errors:
     st.warning(e)
 
 # =========================
-# 💾 SAVE (CORRIGÉ)
+# 💾 SAVE SQLITE
 # =========================
 if st.button("💾 Enregistrer"):
 
     if len(errors) > 0:
-        st.error("❌ Corrige les erreurs avant d’enregistrer")
+        st.error("❌ Corrige les erreurs")
     else:
         row = {
             "Date": current_date.strftime("%Y-%m-%d"),
@@ -132,12 +131,10 @@ if st.button("💾 Enregistrer"):
             "Niveau_cat": niveau
         }
 
-        st.write("📦 Donnée envoyée :", row)
-
-        success = add_row_safe(row)
+        success = add_row(row)
 
         if success:
-            st.success("✅ Enregistrement réussi")
+            st.success("✅ Enregistré en base SQLite")
             st.rerun()
         else:
-            st.error("❌ Échec enregistrement")
+            st.error("❌ Erreur DB")
