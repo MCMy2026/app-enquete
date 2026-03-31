@@ -17,7 +17,7 @@ df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
 # =========================
 # 📂 BASE PANELISTES
 # =========================
-df_pool = pd.read_excel("data/base_appels.xlsx")
+df_pool = pd.read_excel("data/base_appels_clean.xlsx")
 
 # 🔥 NORMALISATION CRITIQUE
 df_pool["Telephone"] = df_pool["Telephone"].apply(normalize_phone)
@@ -139,3 +139,5 @@ if st.button("💾 Enregistrer", disabled=len(errors) > 0):
         st.rerun()
     else:
         st.error("❌ Erreur enregistrement")
+
+       

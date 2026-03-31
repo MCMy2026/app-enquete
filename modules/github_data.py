@@ -115,3 +115,5 @@ def add_row_safe(row):
     except Exception as e:
         print("❌ ERREUR ADD:", e)
         return False
+    
+    
