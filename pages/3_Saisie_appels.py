@@ -4,9 +4,7 @@ import os
 
 from modules.github_data import read_data, add_row_safe, normalize_phone
 
-st.cache_data.clear()
-
-st.title("📞 Saisie appels (Version finale)")
+st.title("📞 Saisie appels (FIX FINAL)")
 
 # =========================
 # 📥 DATA
@@ -14,12 +12,13 @@ st.title("📞 Saisie appels (Version finale)")
 df, _ = read_data()
 
 # =========================
-# 📂 BASE PANEL (AUTO CLEAN SI MANQUANT)
+# 📂 BASE PANEL
 # =========================
 if os.path.exists("data/base_appels_clean.xlsx"):
     df_pool = pd.read_excel("data/base_appels_clean.xlsx")
 else:
-    df_pool = pd.read_excel("data/base_appels.xlsx")
+    st.error("❌ base_appels_clean.xlsx manquant")
+    st.stop()
 
 df_pool["Telephone"] = df_pool["Telephone"].apply(normalize_phone)
 
@@ -29,8 +28,10 @@ df_pool["Telephone"] = df_pool["Telephone"].apply(normalize_phone)
 telephone = st.text_input("📞 Téléphone")
 telephone_clean = normalize_phone(telephone)
 
+st.write("📞 Téléphone normalisé :", telephone_clean)
+
 # =========================
-# 🔍 MATCH
+# 🔍 MATCH PANEL
 # =========================
 paneliste = None
 
@@ -41,10 +42,10 @@ if telephone_clean != "":
         paneliste = match.iloc[0]
         st.success("✅ Paneliste reconnu")
     else:
-        st.warning("⚠️ Numéro inconnu")
+        st.error("❌ Numéro non trouvé dans la base")
 
 # =========================
-# 📍 COMMUNE AUTO
+# 📍 COMMUNE
 # =========================
 if paneliste is not None:
     commune = paneliste["Commune"]
@@ -53,7 +54,7 @@ else:
     commune = st.text_input("Commune")
 
 # =========================
-# 👤 INFOS AUTO
+# 👤 INFOS
 # =========================
 if paneliste is not None:
     sexe = paneliste["Sexe"]
@@ -108,27 +109,35 @@ if already_today > 0:
 if calls_week >= 2:
     errors.append("Limite hebdomadaire atteinte")
 
+# afficher erreurs
 for e in errors:
-    st.error(e)
+    st.warning(e)
 
 # =========================
-# 💾 SAVE
+# 💾 SAVE (CORRIGÉ)
 # =========================
-if st.button("💾 Enregistrer", disabled=len(errors) > 0):
+if st.button("💾 Enregistrer"):
 
-    row = {
-        "Date": current_date.strftime("%Y-%m-%d"),
-        "Enqueteur": st.session_state.get("name", "user"),
-        "Telephone": telephone_clean,
-        "Commune": commune,
-        "Status": "Répondu",
-        "Sexe": sexe,
-        "Age_group": age,
-        "Niveau_cat": niveau
-    }
-
-    if add_row_safe(row):
-        st.success("✅ Enregistré")
-        st.rerun()
+    if len(errors) > 0:
+        st.error("❌ Corrige les erreurs avant d’enregistrer")
     else:
-        st.error("❌ Erreur enregistrement")
+        row = {
+            "Date": current_date.strftime("%Y-%m-%d"),
+            "Enqueteur": st.session_state.get("name", "user"),
+            "Telephone": telephone_clean,
+            "Commune": commune,
+            "Status": "Répondu",
+            "Sexe": sexe,
+            "Age_group": age,
+            "Niveau_cat": niveau
+        }
+
+        st.write("📦 Donnée envoyée :", row)
+
+        success = add_row_safe(row)
+
+        if success:
+            st.success("✅ Enregistrement réussi")
+            st.rerun()
+        else:
+            st.error("❌ Échec enregistrement")
