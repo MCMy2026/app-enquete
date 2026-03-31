@@ -1,24 +1,38 @@
 import pandas as pd
 import os
 
+FILE_PATH = "data/appels_saisis.csv"
+
 COLUMNS = [
     "Date","Enqueteur","Telephone","Commune",
     "Status","Sexe","Age_group","Niveau_cat"
 ]
 
-FILE_PATH = "data/appels_saisis.csv"
-
 # =========================
-# 🔥 NORMALIZE PHONE (GLOBAL)
+# 🔥 NORMALISATION ULTRA ROBUSTE
 # =========================
 def normalize_phone(x):
-    try:
-        return str(int(float(x)))
-    except:
-        return str(x).replace(" ", "").replace("-", "").replace(".0", "").strip()
+    if pd.isna(x):
+        return ""
+
+    x = str(x)
+
+    # garder uniquement les chiffres
+    x = "".join(c for c in x if c.isdigit())
+
+    # supprimer indicatif pays (225)
+    if x.startswith("225"):
+        x = x[3:]
+
+    # corriger longueur
+    if len(x) > 10 and x.startswith("0"):
+        x = x[1:]
+
+    return x
+
 
 # =========================
-# 📥 READ
+# 📥 READ DATA
 # =========================
 def read_data():
 
@@ -34,14 +48,15 @@ def read_data():
 
     df = df[COLUMNS]
 
-    # nettoyage critique
+    # nettoyage
     df["Telephone"] = df["Telephone"].apply(normalize_phone)
     df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
 
     return df, None
 
+
 # =========================
-# 💾 SAVE
+# 💾 SAVE DATA
 # =========================
 def save_data(df):
 
@@ -55,6 +70,7 @@ def save_data(df):
 
     df.to_csv(FILE_PATH, index=False)
     return True
+
 
 # =========================
 # ➕ ADD ROW SAFE
@@ -71,7 +87,7 @@ def add_row_safe(row):
 
     new_row = new_row[COLUMNS]
 
-    # 💥 NORMALISATION ICI
+    # normalisation critique
     new_row["Telephone"] = new_row["Telephone"].apply(normalize_phone)
 
     df = pd.concat([df, new_row], ignore_index=True)
