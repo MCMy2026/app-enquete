@@ -1,206 +1,82 @@
 import streamlit as st
-import pandas as pd
-
-from modules.github_data import read_data, add_row_safe
-from modules.kpi_quotas import compute_quota_kpis
-from modules.recommendation import build_recommendation_message, recommend_panelists
-from modules.quotas import get_quotas
-from modules.mission import compute_daily_mission
+from datetime import date
+from modules.github_data import add_row_safe
 
 # =========================
-# 🔐 AUTH
+# 🔐 SESSION
 # =========================
 if "authentication_status" not in st.session_state or not st.session_state["authentication_status"]:
-    st.warning("🔒 Veuillez vous connecter")
+    st.error("❌ Accès refusé")
     st.stop()
 
-st.title("📞 Saisie intelligente (PRO)")
+username = st.session_state.get("username", "unknown")
 
 # =========================
-# 🧠 UTILS
+# 🏠 UI
 # =========================
-def clean_phone(phone):
-    return str(phone).replace(" ", "").replace("-", "").strip()
+st.title("📞 Saisie des appels")
 
-# =========================
-# 📥 DATA
-# =========================
-df, _ = read_data()
-
-if df.empty:
-    df = pd.DataFrame(columns=[
-        "Date","Enqueteur","Telephone","Commune",
-        "Status","Sexe","Age_group","Niveau_cat"
-    ])
-
-df["Telephone"] = df["Telephone"].astype(str).apply(clean_phone)
-df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+st.markdown("---")
 
 # =========================
-# 📊 KPI
+# 📥 FORMULAIRE
 # =========================
-quotas = get_quotas()
-kpis = compute_quota_kpis(df, quotas)
+with st.form("form_appel"):
 
-st.subheader("🤖 Recommandation")
-st.info(build_recommendation_message(kpis))
+    col1, col2 = st.columns(2)
+
+    with col1:
+        date_appel = st.date_input("📅 Date", value=date.today())
+        telephone = st.text_input("📞 Téléphone")
+        commune = st.text_input("🏙️ Commune")
+
+    with col2:
+        status = st.selectbox("📊 Statut", ["Répondu", "Non Répondu"])
+        sexe = st.selectbox("👤 Sexe", ["Homme", "Femme"])
+        age_group = st.selectbox("🎂 Tranche d'âge", ["Jeune", "Moyen", "Senior"])
+        niveau = st.selectbox("🎓 Niveau", ["Inférieur", "Supérieur"])
+
+    submit = st.form_submit_button("💾 Enregistrer")
 
 # =========================
-# 📂 BASE PANEL
+# 🚀 TRAITEMENT
 # =========================
-df_pool = pd.read_excel("data/base_appels.xlsx")
-df_pool["Telephone"] = df_pool["Telephone"].astype(str).apply(clean_phone)
+if submit:
 
-communes = sorted(df_pool["Commune"].dropna().unique())
+    # =========================
+    # 🔒 VALIDATIONS
+    # =========================
+    if not telephone.strip():
+        st.warning("⚠️ Téléphone obligatoire")
+        st.stop()
 
-# =========================
-# 📞 INPUT TEL
-# =========================
-telephone = st.text_input("Téléphone")
-telephone_clean = clean_phone(telephone)
-paneliste = None
+    if not telephone.isdigit():
+        st.warning("⚠️ Téléphone invalide (chiffres uniquement)")
+        st.stop()
 
-if telephone_clean:
-    match = df_pool[df_pool["Telephone"] == telephone_clean]
+    # =========================
+    # 📦 CONSTRUCTION SAFE ROW
+    # =========================
+    row = {
+        "Date": str(date_appel),
+        "Enqueteur": username,
+        "Telephone": telephone.strip(),
+        "Commune": commune.strip(),
+        "Status": status,
+        "Sexe": sexe,
+        "Age_group": age_group,
+        "Niveau_cat": niveau
+    }
 
-    if not match.empty:
-        paneliste = match.iloc[0]
-        st.success("✅ Paneliste reconnu")
+    # DEBUG (tu peux enlever après test)
+    # st.write(row)
 
-        st.write("👤 Nom :", paneliste.get("Nom", "N/A"))
-        st.write("📍 Commune :", paneliste["Commune"])
-        st.write("⚧ Sexe :", paneliste["Sexe"])
-        st.write("🎂 Age :", paneliste["Age_group"])
-        st.write("🎓 Niveau :", paneliste["Niveau_cat"])
+    # =========================
+    # 💾 SAUVEGARDE
+    # =========================
+    success = add_row_safe(row)
+
+    if success:
+        st.success("✅ Appel enregistré avec succès")
     else:
-        st.warning("⚠️ Numéro inconnu")
-
-# =========================
-# 📍 COMMUNE
-# =========================
-if paneliste is not None and paneliste["Commune"] in communes:
-    commune = st.selectbox("Commune", communes, index=communes.index(paneliste["Commune"]))
-else:
-    commune = st.selectbox("Commune", communes)
-
-# =========================
-# 📅 DATE
-# =========================
-date = st.date_input("Date")
-current_date = pd.to_datetime(date)
-
-# =========================
-# 📊 RÈGLE SEMAINE
-# =========================
-df["Year"] = df["Date"].dt.isocalendar().year
-df["Week"] = df["Date"].dt.isocalendar().week
-
-calls_week = df[
-    (df["Telephone"] == telephone_clean) &
-    (df["Year"] == current_date.isocalendar().year) &
-    (df["Week"] == current_date.isocalendar().week)
-].shape[0]
-
-st.info(f"📊 Appels semaine : {calls_week}/2")
-
-# =========================
-# 🎯 MISSION
-# =========================
-df_today = df[
-    (df["Commune"] == commune) &
-    (df["Date"].dt.date == current_date.date())
-]
-
-st.subheader("🎯 Mission du jour")
-st.dataframe(compute_daily_mission(df_today, quotas))
-
-# =========================
-# 🤖 SUGGESTIONS
-# =========================
-suggestions = recommend_panelists(
-    df_pool[df_pool["Commune"] == commune],
-    df,
-    kpis
-)
-
-st.subheader("📞 Suggestions")
-st.dataframe(suggestions)
-
-# =========================
-# 🧾 FORM
-# =========================
-sexe = st.selectbox("Sexe", ["Homme","Femme"])
-age = st.selectbox("Age", ["18-39","40-54","55+"])
-niveau = st.selectbox("Niveau", ["inferieur","superieur"])
-status = st.selectbox("Statut", ["Répondu","Occupé","Absent"])
-
-enq = st.session_state["name"]
-
-# =========================
-# 🧠 SCORE
-# =========================
-score = 100
-
-already_today = df[
-    (df["Telephone"] == telephone_clean) &
-    (df["Date"].dt.date == current_date.date())
-].shape[0]
-
-if already_today > 0:
-    score -= 80
-
-if calls_week >= 2:
-    score -= 50
-
-st.subheader("🧠 Score appel")
-
-if score >= 70:
-    st.success(f"Score {score} → recommandé")
-elif score >= 40:
-    st.warning(f"Score {score} → moyen")
-else:
-    st.error(f"Score {score} → déconseillé")
-
-# =========================
-# 🚫 VALIDATIONS
-# =========================
-errors = []
-
-if telephone_clean == "":
-    errors.append("Numéro obligatoire")
-
-if paneliste is None:
-    errors.append("Numéro non reconnu")
-
-if calls_week >= 2:
-    errors.append("Limite semaine atteinte")
-
-if already_today > 0:
-    errors.append("Déjà appelé aujourd’hui")
-
-for e in errors:
-    st.error(e)
-
-# =========================
-# 💾 SAVE
-# =========================
-disable_button = len(errors) > 0 or score < 40
-
-if st.button("Enregistrer", disabled=disable_button):
-
-    row = [
-        current_date.strftime("%Y-%m-%d"),
-        str(enq),
-        telephone_clean,
-        commune,
-        status,
-        sexe,
-        age,
-        niveau
-    ]
-
-    if add_row_safe(row):
-        st.success("✅ Enregistré")
-        st.rerun()
-    else:
-        st.error("❌ Erreur GitHub")
+        st.error("❌ Échec de l'enregistrement")

@@ -3,6 +3,7 @@ import pandas as pd
 import base64
 import time
 import streamlit as st
+from io import StringIO
 
 # =========================
 # ⚙️ CONFIG GITHUB
@@ -28,12 +29,17 @@ def read_data():
         content = base64.b64decode(data["content"]).decode()
 
         try:
-            df = pd.read_csv(pd.io.common.StringIO(content))
-        except:
+            df = pd.read_csv(StringIO(content))
+        except Exception:
             df = pd.DataFrame()
 
         return df, data["sha"]
 
+    # fichier inexistant
+    if r.status_code == 404:
+        return pd.DataFrame(), None
+
+    st.error(f"❌ Lecture GitHub impossible ({r.status_code})")
     return pd.DataFrame(), None
 
 
@@ -44,48 +50,49 @@ def save_data(df):
 
     max_attempts = 5
 
+    required_cols = [
+        "Date",
+        "Enqueteur",
+        "Telephone",
+        "Commune",
+        "Status",
+        "Sexe",
+        "Age_group",
+        "Niveau_cat"
+    ]
+
     for attempt in range(max_attempts):
 
         current_df, sha = read_data()
 
+        # =========================
+        # 🆕 INIT SI FICHIER ABSENT
+        # =========================
         if sha is None:
-            time.sleep(1)
-            continue
+            current_df = pd.DataFrame(columns=required_cols)
+            sha = None
 
         # =========================
-        # 🔥 STRUCTURE STANDARD
+        # 🔧 NORMALISATION COLONNES
         # =========================
-        required_cols = [
-            "Date",
-            "Enqueteur",
-            "Telephone",
-            "Commune",
-            "Status",
-            "Sexe",
-            "Age_group",
-            "Niveau_cat"
-        ]
-
-        # 👉 Si fichier vide
         if current_df.empty:
             current_df = pd.DataFrame(columns=required_cols)
 
-        # 👉 Ajouter colonnes manquantes côté GitHub
+        # Ajouter colonnes manquantes
         for col in required_cols:
             if col not in current_df.columns:
                 current_df[col] = ""
 
-        # 👉 Ajouter colonnes manquantes côté app
         for col in required_cols:
             if col not in df.columns:
                 df[col] = ""
 
-        # 👉 Forcer ordre propre
+        # Forcer ordre
         current_df = current_df[required_cols]
         df = df[required_cols]
 
         # =========================
-        # 📦 MERGE DATA
+        # 📦 MERGE
         # =========================
         merged = pd.concat([current_df, df], ignore_index=True)
 
@@ -96,9 +103,12 @@ def save_data(df):
             "message": "Update appels_saisis.csv",
             "content": base64.b64encode(
                 merged.to_csv(index=False).encode()
-            ).decode(),
-            "sha": sha,
+            ).decode()
         }
+
+        # ⚠️ sha seulement si fichier existe
+        if sha:
+            payload["sha"] = sha
 
         url = f"https://api.github.com/repos/{REPO}/contents/{FILE_PATH}"
         r = requests.put(url, json=payload, headers=HEADERS)
@@ -106,12 +116,12 @@ def save_data(df):
         if r.status_code in (200, 201):
             return True
 
-        # 👉 conflit GitHub → retry
+        # conflit → retry
         if r.status_code == 409:
             time.sleep(1)
             continue
 
-        st.error(f"❌ GitHub ERROR {r.status_code}: {r.json()}")
+        st.error(f"❌ GitHub ERROR {r.status_code}: {r.text}")
         return False
 
     return False
@@ -122,18 +132,35 @@ def save_data(df):
 # =========================
 def add_row_safe(row):
 
+    # =========================
+    # 🔒 VALIDATION INPUT
+    # =========================
+    if not isinstance(row, dict):
+        st.error("❌ Format de données invalide")
+        return False
+
+    today = str(row.get("Date", "")).strip()
+    tel = str(row.get("Telephone", "")).strip()
+
+    if not today or not tel:
+        st.error("❌ Date ou téléphone manquant")
+        return False
+
     df_new = pd.DataFrame([row])
 
     current_df, _ = read_data()
 
     if not current_df.empty:
 
-        # =========================
-        # 🔒 ANTI DOUBLON JOUR
-        # =========================
-        today = row["Date"]
-        tel = row["Telephone"]
+        # sécuriser colonnes
+        if "Date" not in current_df.columns:
+            current_df["Date"] = ""
+        if "Telephone" not in current_df.columns:
+            current_df["Telephone"] = ""
 
+        # =========================
+        # 🔒 RÈGLE 1 : DOUBLON JOUR
+        # =========================
         doublon = current_df[
             (current_df["Date"] == today) &
             (current_df["Telephone"] == tel)
@@ -144,7 +171,7 @@ def add_row_safe(row):
             return False
 
         # =========================
-        # 🔒 LIMITE 2 FOIS / SEMAINE
+        # 🔒 RÈGLE 2 : MAX 2 FOIS
         # =========================
         nb = current_df[
             current_df["Telephone"] == tel
