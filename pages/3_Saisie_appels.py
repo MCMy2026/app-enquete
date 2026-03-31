@@ -1,127 +1,129 @@
-import streamlit as st
-import pandas as pd
+import sqlite3
 import os
+import pandas as pd
 
-from modules.db import init_db, read_data, add_row, normalize_phone
+DB_PATH = "data/appels.db"
 
-st.title("📞 Saisie appels")
-
-# =========================
-# INIT
-# =========================
-init_db()
-df = read_data()
+COLUMNS = [
+    "Date","Enqueteur","Telephone","Commune",
+    "Status","Sexe","Age_group","Niveau_cat"
+]
 
 # =========================
-# BASE PANEL
+# 📞 NORMALISATION TELEPHONE
 # =========================
-if not os.path.exists("data/base_appels_clean.xlsx"):
-    st.error("Base panel manquante")
-    st.stop()
+def normalize_phone(x):
+    if pd.isna(x):
+        return ""
 
-df_pool = pd.read_excel("data/base_appels_clean.xlsx")
-df_pool["Telephone"] = df_pool["Telephone"].apply(normalize_phone)
+    x = str(x)
+    x = "".join(c for c in x if c.isdigit())
 
-# =========================
-# INPUT
-# =========================
-telephone = st.text_input("Téléphone")
-telephone_clean = normalize_phone(telephone)
+    if x.startswith("225"):
+        x = x[3:]
+    if x.startswith("0"):
+        x = x[1:]
 
-paneliste = None
+    return "225" + x
 
-if telephone_clean:
-    match = df_pool[df_pool["Telephone"] == telephone_clean]
-    if not match.empty:
-        paneliste = match.iloc[0]
-    else:
-        st.warning("Numéro non reconnu")
 
 # =========================
-# AUTO REMPLISSAGE
+# INIT DB
 # =========================
-if paneliste is not None:
-    commune = paneliste["Commune"]
-    sexe = paneliste["Sexe"]
-    age = paneliste["Age_group"]
-    niveau = paneliste["Niveau_cat"]
+def init_db():
+    os.makedirs("data", exist_ok=True)
 
-    st.text_input("Commune", commune, disabled=True)
-    st.text_input("Sexe", sexe, disabled=True)
-    st.text_input("Age", age, disabled=True)
-    st.text_input("Niveau", niveau, disabled=True)
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
 
-else:
-    commune = st.text_input("Commune")
-    sexe = st.selectbox("Sexe", ["Homme","Femme"])
-    age = st.selectbox("Age", ["18-39","40-54","55+"])
-    niveau = st.selectbox("Niveau", ["inferieur","superieur"])
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS appels (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            Date TEXT,
+            Enqueteur TEXT,
+            Telephone TEXT,
+            Commune TEXT,
+            Status TEXT,
+            Sexe TEXT,
+            Age_group TEXT,
+            Niveau_cat TEXT
+        )
+    """)
 
-# =========================
-# DATE
-# =========================
-date = st.date_input("Date")
-current_date = pd.to_datetime(date)
-current_day = current_date.date()
+    conn.commit()
+    conn.close()
 
-# =========================
-# HISTORIQUE
-# =========================
-historique = df[df["Telephone"] == telephone_clean]
-
-already_today = historique[
-    historique["Date_only"] == current_day
-].shape[0]
-
-current_year = current_date.isocalendar().year
-current_week = current_date.isocalendar().week
-
-calls_week = historique[
-    (historique["Year"] == current_year) &
-    (historique["Week"] == current_week)
-].shape[0]
 
 # =========================
-# VALIDATION
+# READ
 # =========================
-errors = []
+def read_data():
+    conn = sqlite3.connect(DB_PATH)
+    df = pd.read_sql_query("SELECT * FROM appels", conn)
+    conn.close()
 
-if not telephone_clean:
-    errors.append("Téléphone obligatoire")
+    if df.empty:
+        df = pd.DataFrame(columns=COLUMNS)
 
-if paneliste is None:
-    errors.append("Numéro invalide")
+    df["Telephone"] = df["Telephone"].apply(normalize_phone)
+    df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
 
-if already_today >= 1:
-    errors.append("Déjà appelé aujourd’hui")
+    df["Date_only"] = df["Date"].dt.date
+    df["Year"] = df["Date"].dt.isocalendar().year
+    df["Week"] = df["Date"].dt.isocalendar().week
 
-if calls_week >= 2:
-    errors.append("Quota hebdomadaire atteint")
+    return df
+
 
 # =========================
-# SAVE
+# INSERT
 # =========================
-if st.button("Enregistrer"):
+def add_row(row):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
 
-    if errors:
-        for e in errors:
-            st.error(e)
-    else:
-        row = {
-            "Date": current_date.strftime("%Y-%m-%d"),
-            "Enqueteur": st.session_state.get("name", "agent"),
-            "Telephone": telephone_clean,
-            "Commune": commune,
-            "Status": "Répondu",
-            "Sexe": sexe,
-            "Age_group": age,
-            "Niveau_cat": niveau
-        }
+    cursor.execute("""
+        INSERT INTO appels (
+            Date, Enqueteur, Telephone, Commune,
+            Status, Sexe, Age_group, Niveau_cat
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        row["Date"],
+        row["Enqueteur"],
+        row["Telephone"],
+        row["Commune"],
+        row["Status"],
+        row["Sexe"],
+        row["Age_group"],
+        row["Niveau_cat"]
+    ))
 
-        success = add_row(row)
+    conn.commit()
+    conn.close()
 
-        if success:
-            st.success("Enregistrement effectué")
-            st.rerun()
-        else:
-            st.error("Doublon détecté")
+
+# =========================
+# UPDATE (clé du mode terrain)
+# =========================
+def update_today_call(row):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        UPDATE appels
+        SET Enqueteur=?, Commune=?, Status=?, Sexe=?, Age_group=?, Niveau_cat=?
+        WHERE Telephone=? AND Date=?
+    """, (
+        row["Enqueteur"],
+        row["Commune"],
+        row["Status"],
+        row["Sexe"],
+        row["Age_group"],
+        row["Niveau_cat"],
+        row["Telephone"],
+        row["Date"]
+    ))
+
+    conn.commit()
+    conn.close()

@@ -9,6 +9,9 @@ COLUMNS = [
     "Status","Sexe","Age_group","Niveau_cat"
 ]
 
+# =========================
+# 📞 NORMALISATION TELEPHONE
+# =========================
 def normalize_phone(x):
     if pd.isna(x):
         return ""
@@ -24,6 +27,9 @@ def normalize_phone(x):
     return "225" + x
 
 
+# =========================
+# INIT DB
+# =========================
 def init_db():
     os.makedirs("data", exist_ok=True)
 
@@ -44,15 +50,13 @@ def init_db():
         )
     """)
 
-    cursor.execute("""
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_call
-        ON appels (Telephone, Date)
-    """)
-
     conn.commit()
     conn.close()
 
 
+# =========================
+# READ
+# =========================
 def read_data():
     conn = sqlite3.connect(DB_PATH)
     df = pd.read_sql_query("SELECT * FROM appels", conn)
@@ -71,32 +75,55 @@ def read_data():
     return df
 
 
+# =========================
+# INSERT
+# =========================
 def add_row(row):
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
 
-        cursor.execute("""
-            INSERT INTO appels (
-                Date, Enqueteur, Telephone, Commune,
-                Status, Sexe, Age_group, Niveau_cat
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            row["Date"],
-            row["Enqueteur"],
-            row["Telephone"],
-            row["Commune"],
-            row["Status"],
-            row["Sexe"],
-            row["Age_group"],
-            row["Niveau_cat"]
-        ))
+    cursor.execute("""
+        INSERT INTO appels (
+            Date, Enqueteur, Telephone, Commune,
+            Status, Sexe, Age_group, Niveau_cat
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        row["Date"],
+        row["Enqueteur"],
+        row["Telephone"],
+        row["Commune"],
+        row["Status"],
+        row["Sexe"],
+        row["Age_group"],
+        row["Niveau_cat"]
+    ))
 
-        conn.commit()
-        conn.close()
+    conn.commit()
+    conn.close()
 
-        return True
 
-    except sqlite3.IntegrityError:
-        return False
+# =========================
+# UPDATE (clé du mode terrain)
+# =========================
+def update_today_call(row):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        UPDATE appels
+        SET Enqueteur=?, Commune=?, Status=?, Sexe=?, Age_group=?, Niveau_cat=?
+        WHERE Telephone=? AND Date=?
+    """, (
+        row["Enqueteur"],
+        row["Commune"],
+        row["Status"],
+        row["Sexe"],
+        row["Age_group"],
+        row["Niveau_cat"],
+        row["Telephone"],
+        row["Date"]
+    ))
+
+    conn.commit()
+    conn.close()
