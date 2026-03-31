@@ -2,7 +2,7 @@ import pandas as pd
 import os
 
 # =========================
-# 🔥 NORMALISATION TEL
+# 🔥 NORMALISATION TELEPHONE (FORMAT 225XXXXXXXXX)
 # =========================
 def normalize_phone(x):
     if pd.isna(x):
@@ -11,23 +11,26 @@ def normalize_phone(x):
     x = str(x)
     x = "".join(c for c in x if c.isdigit())
 
+    # enlever indicatif existant
     if x.startswith("225"):
         x = x[3:]
 
-    return x
+    # enlever 0 initial
+    if x.startswith("0"):
+        x = x[1:]
+
+    # ajouter indicatif
+    return "225" + x
 
 
 # =========================
-# 🚀 CLEAN BASE
+# 🚀 NETTOYAGE BASE
 # =========================
 def clean_base():
 
     input_file = "data/base_appels.xlsx"
     output_file = "data/base_appels_clean.xlsx"
 
-    print("📂 Lecture fichier :", input_file)
-
-    # 🔥 vérifier existence
     if not os.path.exists(input_file):
         print("❌ Fichier introuvable :", input_file)
         return
@@ -35,7 +38,7 @@ def clean_base():
     df = pd.read_excel(input_file)
 
     print("✅ Fichier chargé")
-    print("Colonnes:", df.columns.tolist())
+    print("Colonnes avant:", df.columns.tolist())
 
     # =========================
     # 🔥 NORMALISER COLONNES
@@ -77,14 +80,10 @@ def clean_base():
     # 💾 SAVE
     # =========================
     os.makedirs("data", exist_ok=True)
-
     df.to_excel(output_file, index=False)
 
-    print("✅ FICHIER CRÉÉ :", output_file)
+    print("✅ Base nettoyée créée :", output_file)
 
 
-# =========================
-# ▶️ EXECUTION DIRECTE
-# =========================
 if __name__ == "__main__":
     clean_base()

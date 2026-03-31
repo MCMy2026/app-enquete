@@ -1,25 +1,26 @@
 import streamlit as st
 import pandas as pd
+import os
 
 from modules.github_data import read_data, add_row_safe, normalize_phone
 
 st.cache_data.clear()
 
-st.title("📞 Saisie appels - VERSION CORRIGÉE")
+st.title("📞 Saisie appels (Version finale)")
 
 # =========================
-# 📥 DATA HISTORIQUE
+# 📥 DATA
 # =========================
 df, _ = read_data()
-df["Telephone"] = df["Telephone"].apply(normalize_phone)
-df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
 
 # =========================
-# 📂 BASE PANELISTES
+# 📂 BASE PANEL (AUTO CLEAN SI MANQUANT)
 # =========================
-df_pool = pd.read_excel("data/base_appels_clean.xlsx")
+if os.path.exists("data/base_appels_clean.xlsx"):
+    df_pool = pd.read_excel("data/base_appels_clean.xlsx")
+else:
+    df_pool = pd.read_excel("data/base_appels.xlsx")
 
-# 🔥 NORMALISATION CRITIQUE
 df_pool["Telephone"] = df_pool["Telephone"].apply(normalize_phone)
 
 # =========================
@@ -29,7 +30,7 @@ telephone = st.text_input("📞 Téléphone")
 telephone_clean = normalize_phone(telephone)
 
 # =========================
-# 🔍 MATCH PANELISTE (CORRIGÉ)
+# 🔍 MATCH
 # =========================
 paneliste = None
 
@@ -40,10 +41,10 @@ if telephone_clean != "":
         paneliste = match.iloc[0]
         st.success("✅ Paneliste reconnu")
     else:
-        st.warning("⚠️ Numéro non trouvé dans la base")
+        st.warning("⚠️ Numéro inconnu")
 
 # =========================
-# 📍 COMMUNE AUTO (FIX)
+# 📍 COMMUNE AUTO
 # =========================
 if paneliste is not None:
     commune = paneliste["Commune"]
@@ -73,9 +74,9 @@ else:
 date = st.date_input("Date")
 current_date = pd.to_datetime(date)
 
-# =========================
-# 📊 RÈGLES (CORRIGÉES)
-# =========================
+df["Telephone"] = df["Telephone"].apply(normalize_phone)
+df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+
 df["Year"] = df["Date"].dt.isocalendar().year
 df["Week"] = df["Date"].dt.isocalendar().week
 
@@ -91,7 +92,7 @@ already_today = df[
 ].shape[0]
 
 # =========================
-# 🚫 VALIDATION BLOQUANTE
+# 🚫 VALIDATION
 # =========================
 errors = []
 
@@ -99,25 +100,19 @@ if telephone_clean == "":
     errors.append("Téléphone obligatoire")
 
 if paneliste is None:
-    errors.append("Numéro non reconnu (base panel)")
+    errors.append("Numéro non reconnu")
 
 if already_today > 0:
-    errors.append("❌ Déjà appelé aujourd’hui")
+    errors.append("Déjà appelé aujourd’hui")
 
 if calls_week >= 2:
-    errors.append("❌ Limite hebdomadaire atteinte")
+    errors.append("Limite hebdomadaire atteinte")
 
 for e in errors:
     st.error(e)
 
 # =========================
-# 📊 DEBUG (IMPORTANT)
-# =========================
-st.write("📊 Appels semaine:", calls_week)
-st.write("📊 Appels aujourd’hui:", already_today)
-
-# =========================
-# 💾 SAVE (BLOQUÉ SI ERREUR)
+# 💾 SAVE
 # =========================
 if st.button("💾 Enregistrer", disabled=len(errors) > 0):
 
@@ -132,12 +127,8 @@ if st.button("💾 Enregistrer", disabled=len(errors) > 0):
         "Niveau_cat": niveau
     }
 
-    success = add_row_safe(row)
-
-    if success:
+    if add_row_safe(row):
         st.success("✅ Enregistré")
         st.rerun()
     else:
         st.error("❌ Erreur enregistrement")
-
-       

@@ -18,102 +18,68 @@ def normalize_phone(x):
     x = str(x)
     x = "".join(c for c in x if c.isdigit())
 
-    # enlever indicatif pays
     if x.startswith("225"):
         x = x[3:]
 
-    return x
+    if x.startswith("0"):
+        x = x[1:]
+
+    return "225" + x
 
 
 # =========================
-# 📥 READ DATA
+# 📥 READ
 # =========================
 def read_data():
-    try:
-        os.makedirs("data", exist_ok=True)
+    os.makedirs("data", exist_ok=True)
 
-        if not os.path.exists(FILE_PATH):
-            print("⚠️ Fichier inexistant -> création")
-            df = pd.DataFrame(columns=COLUMNS)
-            df.to_csv(FILE_PATH, index=False)
-            return df, None
-
-        df = pd.read_csv(FILE_PATH, dtype=str)
-
-        # sécuriser colonnes
-        for col in COLUMNS:
-            if col not in df.columns:
-                df[col] = ""
-
-        df = df[COLUMNS]
-
-        # nettoyage
-        df["Telephone"] = df["Telephone"].apply(normalize_phone)
-
+    if not os.path.exists(FILE_PATH):
+        df = pd.DataFrame(columns=COLUMNS)
+        df.to_csv(FILE_PATH, index=False)
         return df, None
 
-    except Exception as e:
-        print("❌ ERREUR READ:", e)
-        return pd.DataFrame(columns=COLUMNS), str(e)
+    df = pd.read_csv(FILE_PATH, dtype=str)
+
+    for col in COLUMNS:
+        if col not in df.columns:
+            df[col] = ""
+
+    df = df[COLUMNS]
+    df["Telephone"] = df["Telephone"].apply(normalize_phone)
+
+    df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+
+    return df, None
 
 
 # =========================
-# 💾 SAVE DATA
+# 💾 SAVE
 # =========================
 def save_data(df):
     try:
-        os.makedirs("data", exist_ok=True)
-
-        df = df.copy()
-
-        for col in COLUMNS:
-            if col not in df.columns:
-                df[col] = ""
-
-        df = df[COLUMNS]
-
         df.to_csv(FILE_PATH, index=False)
-
-        print("✅ SAVE OK ->", FILE_PATH)
         return True
-
     except Exception as e:
-        print("❌ ERREUR SAVE:", e)
+        print("❌ SAVE ERROR:", e)
         return False
 
 
 # =========================
-# ➕ ADD ROW SAFE
+# ➕ ADD
 # =========================
 def add_row_safe(row):
-    try:
-        print("📥 AJOUT LIGNE:", row)
+    df, _ = read_data()
 
-        df, err = read_data()
+    new_row = pd.DataFrame([row])
 
-        if err:
-            print("❌ ERREUR READ:", err)
-            return False
+    for col in COLUMNS:
+        if col not in new_row.columns:
+            new_row[col] = ""
 
-        new_row = pd.DataFrame([row])
+    new_row = new_row[COLUMNS]
 
-        for col in COLUMNS:
-            if col not in new_row.columns:
-                new_row[col] = ""
+    new_row["Telephone"] = new_row["Telephone"].apply(normalize_phone)
 
-        new_row = new_row[COLUMNS]
+    df = pd.concat([df, new_row], ignore_index=True)
 
-        new_row["Telephone"] = new_row["Telephone"].apply(normalize_phone)
-
-        df = pd.concat([df, new_row], ignore_index=True)
-
-        print("📊 DF APRÈS AJOUT:")
-        print(df.tail())
-
-        return save_data(df)
-
-    except Exception as e:
-        print("❌ ERREUR ADD:", e)
-        return False
-    
-    
+    return save_data(df)
