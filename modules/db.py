@@ -9,9 +9,6 @@ COLUMNS = [
     "Status","Sexe","Age_group","Niveau_cat"
 ]
 
-# =========================
-# 🔥 NORMALISATION TELEPHONE
-# =========================
 def normalize_phone(x):
     if pd.isna(x):
         return ""
@@ -27,9 +24,6 @@ def normalize_phone(x):
     return "225" + x
 
 
-# =========================
-# 🗄️ INIT DB
-# =========================
 def init_db():
     os.makedirs("data", exist_ok=True)
 
@@ -50,7 +44,6 @@ def init_db():
         )
     """)
 
-    # 🔥 anti doublon
     cursor.execute("""
         CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_call
         ON appels (Telephone, Date)
@@ -60,9 +53,6 @@ def init_db():
     conn.close()
 
 
-# =========================
-# 📥 READ
-# =========================
 def read_data():
     conn = sqlite3.connect(DB_PATH)
     df = pd.read_sql_query("SELECT * FROM appels", conn)
@@ -74,18 +64,17 @@ def read_data():
     df["Telephone"] = df["Telephone"].apply(normalize_phone)
     df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
 
+    df["Date_only"] = df["Date"].dt.date
+    df["Year"] = df["Date"].dt.isocalendar().year
+    df["Week"] = df["Date"].dt.isocalendar().week
+
     return df
 
 
-# =========================
-# ➕ INSERT SAFE
-# =========================
 def add_row(row):
     try:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
-
-        telephone = normalize_phone(row["Telephone"])
 
         cursor.execute("""
             INSERT INTO appels (
@@ -96,7 +85,7 @@ def add_row(row):
         """, (
             row["Date"],
             row["Enqueteur"],
-            telephone,
+            row["Telephone"],
             row["Commune"],
             row["Status"],
             row["Sexe"],
@@ -110,9 +99,4 @@ def add_row(row):
         return True
 
     except sqlite3.IntegrityError:
-        print("⚠️ Doublon bloqué")
-        return False
-
-    except Exception as e:
-        print("💥 ERREUR DB:", e)
         return False

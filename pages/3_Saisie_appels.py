@@ -4,67 +4,55 @@ import os
 
 from modules.db import init_db, read_data, add_row, normalize_phone
 
-st.title("📞 Saisie appels (FINAL STABLE)")
+st.title("📞 Saisie appels")
 
 # =========================
-# INIT DB
+# INIT
 # =========================
 init_db()
-
-# =========================
-# DATA
-# =========================
 df = read_data()
 
 # =========================
 # BASE PANEL
 # =========================
-if os.path.exists("data/base_appels_clean.xlsx"):
-    df_pool = pd.read_excel("data/base_appels_clean.xlsx")
-else:
-    st.error("❌ base_appels_clean.xlsx manquant")
+if not os.path.exists("data/base_appels_clean.xlsx"):
+    st.error("Base panel manquante")
     st.stop()
 
+df_pool = pd.read_excel("data/base_appels_clean.xlsx")
 df_pool["Telephone"] = df_pool["Telephone"].apply(normalize_phone)
 
 # =========================
 # INPUT
 # =========================
-telephone = st.text_input("📞 Téléphone")
+telephone = st.text_input("Téléphone")
 telephone_clean = normalize_phone(telephone)
 
 paneliste = None
 
-if telephone_clean != "":
+if telephone_clean:
     match = df_pool[df_pool["Telephone"] == telephone_clean]
-
     if not match.empty:
         paneliste = match.iloc[0]
-        st.success("✅ Paneliste reconnu")
     else:
-        st.error("❌ Numéro inconnu")
+        st.warning("Numéro non reconnu")
 
 # =========================
-# COMMUNE AUTO
+# AUTO REMPLISSAGE
 # =========================
 if paneliste is not None:
     commune = paneliste["Commune"]
-    st.text_input("Commune", value=commune, disabled=True)
-else:
-    commune = st.text_input("Commune")
-
-# =========================
-# INFOS
-# =========================
-if paneliste is not None:
     sexe = paneliste["Sexe"]
     age = paneliste["Age_group"]
     niveau = paneliste["Niveau_cat"]
 
-    st.text_input("Sexe", value=sexe, disabled=True)
-    st.text_input("Age", value=age, disabled=True)
-    st.text_input("Niveau", value=niveau, disabled=True)
+    st.text_input("Commune", commune, disabled=True)
+    st.text_input("Sexe", sexe, disabled=True)
+    st.text_input("Age", age, disabled=True)
+    st.text_input("Niveau", niveau, disabled=True)
+
 else:
+    commune = st.text_input("Commune")
     sexe = st.selectbox("Sexe", ["Homme","Femme"])
     age = st.selectbox("Age", ["18-39","40-54","55+"])
     niveau = st.selectbox("Niveau", ["inferieur","superieur"])
@@ -74,10 +62,6 @@ else:
 # =========================
 date = st.date_input("Date")
 current_date = pd.to_datetime(date)
-
-df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
-df["Date_only"] = df["Date"].dt.date
-
 current_day = current_date.date()
 
 # =========================
@@ -85,20 +69,9 @@ current_day = current_date.date()
 # =========================
 historique = df[df["Telephone"] == telephone_clean]
 
-st.write("📋 Historique :", historique)
-
-# =========================
-# CHECK TODAY
-# =========================
 already_today = historique[
     historique["Date_only"] == current_day
 ].shape[0]
-
-# =========================
-# CHECK WEEK
-# =========================
-df["Year"] = df["Date"].dt.isocalendar().year
-df["Week"] = df["Date"].dt.isocalendar().week
 
 current_year = current_date.isocalendar().year
 current_week = current_date.isocalendar().week
@@ -113,32 +86,30 @@ calls_week = historique[
 # =========================
 errors = []
 
-if telephone_clean == "":
+if not telephone_clean:
     errors.append("Téléphone obligatoire")
 
 if paneliste is None:
-    errors.append("Numéro non reconnu")
+    errors.append("Numéro invalide")
 
 if already_today >= 1:
     errors.append("Déjà appelé aujourd’hui")
 
 if calls_week >= 2:
-    errors.append("Limite hebdomadaire atteinte")
-
-for e in errors:
-    st.warning(e)
+    errors.append("Quota hebdomadaire atteint")
 
 # =========================
 # SAVE
 # =========================
-if st.button("💾 Enregistrer"):
+if st.button("Enregistrer"):
 
-    if len(errors) > 0:
-        st.error("❌ Corrige les erreurs")
+    if errors:
+        for e in errors:
+            st.error(e)
     else:
         row = {
             "Date": current_date.strftime("%Y-%m-%d"),
-            "Enqueteur": st.session_state.get("name", "user"),
+            "Enqueteur": st.session_state.get("name", "agent"),
             "Telephone": telephone_clean,
             "Commune": commune,
             "Status": "Répondu",
@@ -150,7 +121,7 @@ if st.button("💾 Enregistrer"):
         success = add_row(row)
 
         if success:
-            st.success("✅ Enregistré")
+            st.success("Enregistrement effectué")
             st.rerun()
         else:
-            st.error("❌ Doublon ou erreur DB")
+            st.error("Doublon détecté")
