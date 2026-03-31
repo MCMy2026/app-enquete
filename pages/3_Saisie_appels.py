@@ -20,9 +20,7 @@ st.title("📞 Saisie intelligente (PRO)")
 # 🧠 UTILS
 # =========================
 def clean_phone(phone):
-    phone = str(phone)
-    phone = phone.replace(" ", "").replace("-", "")
-    return phone.strip()
+    return str(phone).replace(" ", "").replace("-", "").replace(".0", "").strip()
 
 # =========================
 # 📥 DATA
@@ -58,7 +56,7 @@ communes = sorted(df_pool["Commune"].dropna().unique())
 # =========================
 # 📞 INPUT TEL
 # =========================
-telephone = st.text_input("Téléphone")
+telephone = st.text_input("📞 Téléphone")
 telephone_clean = clean_phone(telephone)
 paneliste = None
 
@@ -67,32 +65,38 @@ if telephone_clean:
 
     if not match.empty:
         paneliste = match.iloc[0]
+
         st.success("✅ Paneliste reconnu")
 
-        st.write("👤 Nom :", paneliste.get("Nom", "N/A"))
-        st.write("📍 Commune :", paneliste["Commune"])
-        st.write("⚧ Sexe :", paneliste["Sexe"])
-        st.write("🎂 Age :", paneliste["Age_group"])
-        st.write("🎓 Niveau :", paneliste["Niveau_cat"])
+        col1, col2 = st.columns(2)
+        col1.write(f"👤 {paneliste.get('Nom', 'N/A')}")
+        col2.write(f"📍 {paneliste['Commune']}")
+
+        col1.write(f"⚧ {paneliste['Sexe']}")
+        col2.write(f"🎂 {paneliste['Age_group']}")
+
+        st.write(f"🎓 Niveau : {paneliste['Niveau_cat']}")
     else:
-        st.warning("⚠️ Numéro inconnu")
+        st.warning("⚠️ Numéro inconnu (saisie libre)")
 
 # =========================
 # 📍 COMMUNE
 # =========================
-if paneliste is not None and paneliste["Commune"] in communes:
-    commune = st.selectbox("Commune", communes, index=communes.index(paneliste["Commune"]))
+if paneliste is not None:
+    commune = paneliste["Commune"]
+    st.selectbox("Commune", [commune], disabled=True)
+    st.info(f"🔒 Commune verrouillée : {commune}")
 else:
     commune = st.selectbox("Commune", communes)
 
 # =========================
 # 📅 DATE
 # =========================
-date_input = st.date_input("Date")
-current_date = pd.to_datetime(date_input)
+date = st.date_input("Date")
+current_date = pd.to_datetime(date)
 
 # =========================
-# 📊 RÈGLE SEMAINE
+# 📊 RÈGLES
 # =========================
 df["Year"] = df["Date"].dt.isocalendar().year
 df["Week"] = df["Date"].dt.isocalendar().week
@@ -101,6 +105,11 @@ calls_week = df[
     (df["Telephone"] == telephone_clean) &
     (df["Year"] == current_date.isocalendar().year) &
     (df["Week"] == current_date.isocalendar().week)
+].shape[0]
+
+already_today = df[
+    (df["Telephone"] == telephone_clean) &
+    (df["Date"].dt.date == current_date.date())
 ].shape[0]
 
 st.info(f"📊 Appels semaine : {calls_week}/2")
@@ -129,24 +138,30 @@ st.subheader("📞 Suggestions")
 st.dataframe(suggestions)
 
 # =========================
-# 🧾 FORM
+# 📊 AUTO PANELISTE
 # =========================
-sexe = st.selectbox("Sexe", ["Homme","Femme"])
-age = st.selectbox("Age", ["18-39","40-54","55+"])
-niveau = st.selectbox("Niveau", ["inferieur","superieur"])
-status = st.selectbox("Statut", ["Répondu","Occupé","Absent"])
+if paneliste is not None:
+    sexe = paneliste["Sexe"]
+    age = paneliste["Age_group"]
+    niveau = paneliste["Niveau_cat"]
 
-enq = st.session_state["name"]
+    st.selectbox("Sexe", [sexe], disabled=True)
+    st.selectbox("Age", [age], disabled=True)
+    st.selectbox("Niveau", [niveau], disabled=True)
+else:
+    sexe = st.selectbox("Sexe", ["Homme","Femme"])
+    age = st.selectbox("Age", ["18-39","40-54","55+"])
+    niveau = st.selectbox("Niveau", ["inferieur","superieur"])
+
+# =========================
+# 📊 STATUS
+# =========================
+status = st.selectbox("Statut", ["Répondu","Occupé","Absent"])
 
 # =========================
 # 🧠 SCORE
 # =========================
 score = 100
-
-already_today = df[
-    (df["Telephone"] == telephone_clean) &
-    (df["Date"].dt.date == current_date.date())
-].shape[0]
 
 if already_today > 0:
     score -= 80
@@ -154,48 +169,46 @@ if already_today > 0:
 if calls_week >= 2:
     score -= 50
 
-st.subheader("🧠 Score appel")
+st.subheader("🧠 Analyse appel")
 
-if score >= 70:
-    st.success(f"Score {score} → recommandé")
+if already_today > 0:
+    st.error("🚫 Déjà appelé aujourd’hui")
+elif calls_week >= 2:
+    st.error("🚫 Limite semaine atteinte")
+elif score >= 70:
+    st.success("✅ Appel recommandé")
 elif score >= 40:
-    st.warning(f"Score {score} → moyen")
+    st.warning("⚠️ Appel possible")
 else:
-    st.error(f"Score {score} → déconseillé")
+    st.error("❌ Appel déconseillé")
 
 # =========================
-# 🚫 VALIDATIONS
+# 🚫 VALIDATION
 # =========================
 errors = []
 
 if telephone_clean == "":
     errors.append("Numéro obligatoire")
 
-if not telephone_clean.isdigit():
-    errors.append("Numéro invalide")
-
-if paneliste is None:
-    errors.append("Numéro non reconnu")
+if already_today > 0:
+    errors.append("Déjà appelé aujourd’hui")
 
 if calls_week >= 2:
     errors.append("Limite semaine atteinte")
-
-if already_today > 0:
-    errors.append("Déjà appelé aujourd’hui")
 
 for e in errors:
     st.error(e)
 
 # =========================
-# 💾 SAVE (CORRIGÉ)
+# 💾 SAVE
 # =========================
-disable_button = len(errors) > 0 or score < 40
+disable_button = len(errors) > 0
 
-if st.button("Enregistrer", disabled=disable_button):
+if st.button("💾 Enregistrer", disabled=disable_button):
 
     row = {
         "Date": current_date.strftime("%Y-%m-%d"),
-        "Enqueteur": str(enq),
+        "Enqueteur": st.session_state["name"],
         "Telephone": telephone_clean,
         "Commune": commune,
         "Status": status,
@@ -208,4 +221,4 @@ if st.button("Enregistrer", disabled=disable_button):
         st.success("✅ Enregistré")
         st.rerun()
     else:
-        st.error("❌ Erreur GitHub")
+        st.error("❌ Erreur sauvegarde")
