@@ -27,20 +27,20 @@ Date,Enqueteur,Telephone,Commune,Status,Sexe,Age_group,Niveau_cat
 2026-03-28,MME EDI,2250759901504.0,ADJAME,Répondu,Femme,18-39,inferieur
 2026-03-28,MME EDI,2250707660599.0,ADJAME,Répondu,Homme,18-39,inferieur
 2026-03-28,ESTELLE,2250505180562.0,ADJAME,Répondu,Femme,40-54,superieur
-,,,,,,,
-,,,,,,,
-,,,,,,,
-,,,,,,,
-,,,,,,,
-,,,,,,,
-,,,,,,,
-2026-03-30 00:00:00,ADMIN,2250779518545.0,ABOBO,Répondu,Homme,18-39,inferieur
-2026-03-30 00:00:00,ESTELLE,2250102166823.0,ABOBO,Répondu,Homme,18-39,inferieur
-2026-03-30 00:00:00,ESTELLE,2250170585810.0,ABOBO,Répondu,Homme,18-39,inferieur
-2026-03-30 00:00:00,ADMIN,2250102166823.0,ABOBO,Répondu,Homme,18-39,inferieur
-2026-03-30 00:00:00,ADMIN,2250749313078.0,ABOBO,Répondu,Homme,18-39,inferieur
-2026-03-30 00:00:00,ADMIN,2250566967477.0,ABOBO,Occupé,Homme,18-39,inferieur
-2026-03-31 00:00:00,ADMIN,2250749313078.0,ABOBO,Répondu,Homme,18-39,inferieur
+,,nan,,,,,
+,,nan,,,,,
+,,nan,,,,,
+,,nan,,,,,
+,,nan,,,,,
+,,nan,,,,,
+,,nan,,,,,
+,ADMIN,2250779518545.0,ABOBO,Répondu,Homme,18-39,inferieur
+,ESTELLE,2250102166823.0,ABOBO,Répondu,Homme,18-39,inferieur
+,ESTELLE,2250170585810.0,ABOBO,Répondu,Homme,18-39,inferieur
+,ADMIN,2250102166823.0,ABOBO,Répondu,Homme,18-39,inferieur
+,ADMIN,2250749313078.0,ABOBO,Répondu,Homme,18-39,inferieur
+,ADMIN,2250566967477.0,ABOBO,Occupé,Homme,18-39,inferieur
+,ADMIN,2250749313078.0,ABOBO,Répondu,Homme,18-39,inferieur
 2026-03-31,admin,2250102166823.0,,Répondu,Homme,Jeune,Inférieur
 2026-03-31,ADMIN,2250102166823.0,ABOBO,Répondu,Homme,18-39,inferieur
 2026-03-31,ADMIN,2250749313078.0,ABOBO,Répondu,Homme,18-39,inferieur
@@ -50,6 +50,7 @@ Date,Enqueteur,Telephone,Commune,Status,Sexe,Age_group,Niveau_cat
 2026-03-31,ADMIN,2250749313078.0,ABOBO,Répondu,Homme,18-39,inferieur
 2026-03-31,ADMIN,2250749313078.0,ABOBO,Répondu,Homme,18-39,inferieur
 2026-03-31,ADMIN,2250749313078.0,ABOBO,Répondu,Homme,18-39,inferieur
+2026-03-31,ADMIN,2250102166823.0,ABOBO,Répondu,Homme,18-39,inferieur
 2026-03-31,ADMIN,2250102166823.0,ABOBO,Répondu,Homme,18-39,inferieur
 2026-03-31,ADMIN,2250102166823.0,ABOBO,Répondu,Homme,18-39,inferieur
 2026-03-31,ADMIN,2250102166823,ABOBO,Répondu,Homme,18-39,inferieur
