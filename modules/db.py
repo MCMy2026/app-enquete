@@ -50,6 +50,12 @@ def init_db():
         )
     """)
 
+    # 🔥 anti doublon
+    cursor.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_call
+        ON appels (Telephone, Date)
+    """)
+
     conn.commit()
     conn.close()
 
@@ -72,32 +78,41 @@ def read_data():
 
 
 # =========================
-# ➕ INSERT
+# ➕ INSERT SAFE
 # =========================
 def add_row(row):
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
 
-    telephone = normalize_phone(row["Telephone"])
+        telephone = normalize_phone(row["Telephone"])
 
-    cursor.execute("""
-        INSERT INTO appels (
-            Date, Enqueteur, Telephone, Commune,
-            Status, Sexe, Age_group, Niveau_cat
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
-        row["Date"],
-        row["Enqueteur"],
-        telephone,
-        row["Commune"],
-        row["Status"],
-        row["Sexe"],
-        row["Age_group"],
-        row["Niveau_cat"]
-    ))
+        cursor.execute("""
+            INSERT INTO appels (
+                Date, Enqueteur, Telephone, Commune,
+                Status, Sexe, Age_group, Niveau_cat
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            row["Date"],
+            row["Enqueteur"],
+            telephone,
+            row["Commune"],
+            row["Status"],
+            row["Sexe"],
+            row["Age_group"],
+            row["Niveau_cat"]
+        ))
 
-    conn.commit()
-    conn.close()
+        conn.commit()
+        conn.close()
 
-    return True
+        return True
+
+    except sqlite3.IntegrityError:
+        print("⚠️ Doublon bloqué")
+        return False
+
+    except Exception as e:
+        print("💥 ERREUR DB:", e)
+        return False

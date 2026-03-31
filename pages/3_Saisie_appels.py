@@ -4,20 +4,20 @@ import os
 
 from modules.db import init_db, read_data, add_row, normalize_phone
 
-st.title("📞 Saisie appels (SQLite PRO)")
+st.title("📞 Saisie appels (FINAL STABLE)")
 
 # =========================
-# 🗄️ INIT DB
+# INIT DB
 # =========================
 init_db()
 
 # =========================
-# 📥 DATA
+# DATA
 # =========================
 df = read_data()
 
 # =========================
-# 📂 BASE PANEL
+# BASE PANEL
 # =========================
 if os.path.exists("data/base_appels_clean.xlsx"):
     df_pool = pd.read_excel("data/base_appels_clean.xlsx")
@@ -28,14 +28,11 @@ else:
 df_pool["Telephone"] = df_pool["Telephone"].apply(normalize_phone)
 
 # =========================
-# 📞 INPUT
+# INPUT
 # =========================
 telephone = st.text_input("📞 Téléphone")
 telephone_clean = normalize_phone(telephone)
 
-# =========================
-# 🔍 MATCH
-# =========================
 paneliste = None
 
 if telephone_clean != "":
@@ -48,7 +45,7 @@ if telephone_clean != "":
         st.error("❌ Numéro inconnu")
 
 # =========================
-# 📍 COMMUNE AUTO
+# COMMUNE AUTO
 # =========================
 if paneliste is not None:
     commune = paneliste["Commune"]
@@ -57,7 +54,7 @@ else:
     commune = st.text_input("Commune")
 
 # =========================
-# 👤 INFOS
+# INFOS
 # =========================
 if paneliste is not None:
     sexe = paneliste["Sexe"]
@@ -73,27 +70,46 @@ else:
     niveau = st.selectbox("Niveau", ["inferieur","superieur"])
 
 # =========================
-# 📅 DATE
+# DATE
 # =========================
 date = st.date_input("Date")
 current_date = pd.to_datetime(date)
 
-df["Year"] = df["Date"].dt.isocalendar().year
-df["Week"] = df["Date"].dt.isocalendar().week
+df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+df["Date_only"] = df["Date"].dt.date
 
-calls_week = df[
-    (df["Telephone"] == telephone_clean) &
-    (df["Year"] == current_date.isocalendar().year) &
-    (df["Week"] == current_date.isocalendar().week)
-].shape[0]
+current_day = current_date.date()
 
-already_today = df[
-    (df["Telephone"] == telephone_clean) &
-    (df["Date"].dt.date == current_date.date())
+# =========================
+# HISTORIQUE
+# =========================
+historique = df[df["Telephone"] == telephone_clean]
+
+st.write("📋 Historique :", historique)
+
+# =========================
+# CHECK TODAY
+# =========================
+already_today = historique[
+    historique["Date_only"] == current_day
 ].shape[0]
 
 # =========================
-# 🚫 VALIDATION
+# CHECK WEEK
+# =========================
+df["Year"] = df["Date"].dt.isocalendar().year
+df["Week"] = df["Date"].dt.isocalendar().week
+
+current_year = current_date.isocalendar().year
+current_week = current_date.isocalendar().week
+
+calls_week = historique[
+    (historique["Year"] == current_year) &
+    (historique["Week"] == current_week)
+].shape[0]
+
+# =========================
+# VALIDATION
 # =========================
 errors = []
 
@@ -103,7 +119,7 @@ if telephone_clean == "":
 if paneliste is None:
     errors.append("Numéro non reconnu")
 
-if already_today > 0:
+if already_today >= 1:
     errors.append("Déjà appelé aujourd’hui")
 
 if calls_week >= 2:
@@ -113,7 +129,7 @@ for e in errors:
     st.warning(e)
 
 # =========================
-# 💾 SAVE SQLITE
+# SAVE
 # =========================
 if st.button("💾 Enregistrer"):
 
@@ -134,7 +150,7 @@ if st.button("💾 Enregistrer"):
         success = add_row(row)
 
         if success:
-            st.success("✅ Enregistré en base SQLite")
+            st.success("✅ Enregistré")
             st.rerun()
         else:
-            st.error("❌ Erreur DB")
+            st.error("❌ Doublon ou erreur DB")
