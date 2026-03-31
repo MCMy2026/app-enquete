@@ -1,5 +1,9 @@
 import pandas as pd
+import os
 
+# =========================
+# 🔥 NORMALISATION TEL
+# =========================
 def normalize_phone(x):
     if pd.isna(x):
         return ""
@@ -13,37 +17,74 @@ def normalize_phone(x):
     return x
 
 
+# =========================
+# 🚀 CLEAN BASE
+# =========================
 def clean_base():
 
-    df = pd.read_excel("data/base_appels.xlsx")
+    input_file = "data/base_appels.xlsx"
+    output_file = "data/base_appels_clean.xlsx"
 
-    print("Colonnes avant:", df.columns.tolist())
+    print("📂 Lecture fichier :", input_file)
 
-    # 🔥 RENOMMER COLONNES
+    # 🔥 vérifier existence
+    if not os.path.exists(input_file):
+        print("❌ Fichier introuvable :", input_file)
+        return
+
+    df = pd.read_excel(input_file)
+
+    print("✅ Fichier chargé")
+    print("Colonnes:", df.columns.tolist())
+
+    # =========================
+    # 🔥 NORMALISER COLONNES
+    # =========================
     df = df.rename(columns={
         "telephone": "Telephone",
         "tel": "Telephone",
         "COMMUNE": "Commune",
         "commune": "Commune",
+        "sexe": "Sexe",
         "age": "Age_group",
-        "niveau": "Niveau_cat",
-        "sexe": "Sexe"
+        "niveau": "Niveau_cat"
     })
 
+    # =========================
     # 🔥 NETTOYAGE TEXTE
+    # =========================
     for col in ["Commune", "Sexe", "Age_group", "Niveau_cat"]:
         if col in df.columns:
             df[col] = df[col].astype(str).str.strip()
 
-    # 🔥 NORMALISATION TELEPHONE
+    # =========================
+    # 🔥 TELEPHONE
+    # =========================
+    if "Telephone" not in df.columns:
+        print("❌ Colonne Telephone absente")
+        return
+
     df["Telephone"] = df["Telephone"].apply(normalize_phone)
 
+    # =========================
     # 🔥 SUPPRIMER DOUBLONS
+    # =========================
     df = df.drop_duplicates(subset=["Telephone"])
 
-    print("Nb après nettoyage:", len(df))
+    print("📊 Nb lignes après clean:", len(df))
 
+    # =========================
     # 💾 SAVE
-    df.to_excel("data/base_appels_clean.xlsx", index=False)
+    # =========================
+    os.makedirs("data", exist_ok=True)
 
-    print("✅ Base nettoyée sauvegardée")
+    df.to_excel(output_file, index=False)
+
+    print("✅ FICHIER CRÉÉ :", output_file)
+
+
+# =========================
+# ▶️ EXECUTION DIRECTE
+# =========================
+if __name__ == "__main__":
+    clean_base()
